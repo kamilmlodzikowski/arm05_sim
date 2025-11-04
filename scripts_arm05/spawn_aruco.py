@@ -4,6 +4,7 @@ import argparse
 import os
 from pathlib import Path
 from typing import Callable, Optional
+import subprocess
 
 import numpy as np
 import rclpy
@@ -39,7 +40,13 @@ class MinimalClientAsync(Node):
         self.spawn_service_type = spawn_service_type
         self.world_name = world_name
         self.request_factory: Optional[Callable[[str, str, Pose], object]] = None
+        self.spawn_mode: Optional[str] = None
         self.spawn_client = self._configure_spawn_client()
+
+        if self.spawn_client is None and self.spawn_mode != 'ros_gz':
+            raise RuntimeError(
+                'Unable to connect to the requested spawn service interface.'
+            )
 
         self.final_aruco_positions = []
 
@@ -57,13 +64,20 @@ class MinimalClientAsync(Node):
                 self.spawn_mode = mode
                 return client
 
-        raise RuntimeError(
-            "Unable to locate a compatible spawn service."
+        # No service connection established; fall back to mode resolution to allow
+        # alternative spawning strategies (e.g. direct Gazebo transport calls).
+        self.spawn_mode = preferred_order[-1]
+        self.get_logger().warning(
+            f"Spawn service could not be reached; falling back to '{self.spawn_mode}' CLI integration"
         )
+        return None
 
     def _try_connect_spawn_service(self, mode: str, wait_forever: bool):
         service_name = self.spawn_service_override
-        max_attempts = None if wait_forever else 10
+        if wait_forever and mode != 'ros_gz':
+            max_attempts = None
+        else:
+            max_attempts = 30
 
         if mode == 'gazebo':
             try:
@@ -133,6 +147,39 @@ class MinimalClientAsync(Node):
         self.spawn_service = service_to_use
         return client
 
+    def _spawn_via_gz_transport(self, sdf_path: Path, name: str, pose: Pose) -> bool:
+        request = (
+            f'sdf_filename: "{sdf_path}", '
+            f'name: "{name}", '
+            'pose: {'
+            f' position: {{ x: {pose.position.x}, y: {pose.position.y}, z: {pose.position.z} }},'
+            f' orientation: {{ w: {pose.orientation.w}, x: {pose.orientation.x}, '
+            f'y: {pose.orientation.y}, z: {pose.orientation.z} }} }}'
+        )
+
+        cmd = [
+            'gz', 'service',
+            '-s', f'/world/{self.world_name}/create',
+            '--reptype', 'gz.msgs.Boolean',
+            '--reqtype', 'gz.msgs.EntityFactory',
+            '--req', request,
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            self.get_logger().error(
+                f"Failed to invoke Gazebo transport to spawn '{name}': {result.stderr.strip()}"
+            )
+            return False
+
+        if 'success: true' in result.stdout.lower():
+            return True
+
+        self.get_logger().error(
+            f"Gazebo transport spawn call for '{name}' was unsuccessful: {result.stdout.strip()}"
+        )
+        return False
+
     def spawn_aruco_cubes(self):
         for i in range(self.aruco_nr):
             aruco_index = np.random.randint(0, len(self.aruco_positions))
@@ -150,36 +197,39 @@ class MinimalClientAsync(Node):
             pose.position.z = 0.0
             pose.orientation.w = 1.0
 
-            request = self.request_factory(xml_str, f'aruco_{i}', pose)
-            future = self.spawn_client.call_async(request)
+            spawn_succeeded = False
 
-            if not rclpy.spin_until_future_complete(self, future, timeout_sec=5.0):
-                self.get_logger().error(
-                    "Timed out waiting for spawn service '%s'" % self.spawn_service
-                )
-                continue
+            if self.spawn_mode == 'ros_gz' and (self.spawn_client is None or self.request_factory is None):
+                spawn_succeeded = self._spawn_via_gz_transport(fpath, f'aruco_{i}', pose)
+            else:
+                request = self.request_factory(xml_str, f'aruco_{i}', pose)
+                future = self.spawn_client.call_async(request)
 
-            try:
-                response = future.result()
-            except Exception as exc:  # noqa: BLE001
-                self.get_logger().error(f'Service call failed: {exc!r}')
-                continue
-
-            success = getattr(response, 'success', True)
-            if not success:
-                status_message = getattr(response, 'status_message', '')
-                if status_message:
+                if not rclpy.spin_until_future_complete(self, future, timeout_sec=5.0):
                     self.get_logger().error(
-                        "Failed to spawn 'aruco_%d': %s" % (i, status_message)
+                        "Timed out waiting for spawn service '%s'" % self.spawn_service
                     )
                 else:
-                    self.get_logger().error("Failed to spawn 'aruco_%d'" % i)
-                continue
+                    try:
+                        response = future.result()
+                    except Exception as exc:  # noqa: BLE001
+                        self.get_logger().error(f'Service call failed: {exc!r}')
+                    else:
+                        spawn_succeeded = getattr(response, 'success', True)
+                        if not spawn_succeeded:
+                            status_message = getattr(response, 'status_message', '')
+                            if status_message:
+                                self.get_logger().error(
+                                    "Failed to spawn 'aruco_%d': %s" % (i, status_message)
+                                )
+                            else:
+                                self.get_logger().error("Failed to spawn 'aruco_%d'" % i)
 
-            self.get_logger().info(
-                "Spawned aruco_%d at (%.2f, %.2f)" % (i, x, y)
-            )
-            self.final_aruco_positions.append((x, y))
+            if spawn_succeeded:
+                self.get_logger().info(
+                    "Spawned aruco_%d at (%.2f, %.2f)" % (i, x, y)
+                )
+                self.final_aruco_positions.append((x, y))
 
     def log_aruco_positions(self, log_path: Path | None = None):
         def log_file(self: 'MinimalClientAsync', filename: Path):
