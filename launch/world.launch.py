@@ -10,6 +10,7 @@ from ament_index_python.packages import (
 )
 from launch import LaunchDescription
 from launch.actions import (
+    AppendEnvironmentVariable,
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
@@ -59,6 +60,12 @@ def generate_launch_description():
         gazebo_paths.append(existing_gazebo_path)
     gazebo_model_path = os.pathsep.join(gazebo_paths)
     resource_env_actions = [SetEnvironmentVariable('GAZEBO_MODEL_PATH', gazebo_model_path)]
+    resource_env_actions.append(
+        AppendEnvironmentVariable('GZ_SIM_RESOURCE_PATH', arm05_models_path)
+    )
+    resource_env_actions.append(
+        AppendEnvironmentVariable('GZ_SIM_RESOURCE_PATH', turtlebot3_models_path)
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     x_pose = LaunchConfiguration('x_pose', default='0.0')
@@ -75,7 +82,6 @@ def generate_launch_description():
     world_name = _resolve_world_name(world)
     map_file = os.path.join(arm05_share_dir, 'map', 'map.yaml')
     params_file = os.path.join(arm05_share_dir, 'param', 'waffle.yaml')
-    bridge_params_file = os.path.join(arm05_share_dir, 'param', 'bridge.yaml')
 
     simulation_actions = []
 
@@ -172,22 +178,6 @@ def generate_launch_description():
         }.items()
     )
 
-    parameter_bridge_cmd = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        arguments=[
-            '--ros-args',
-            '-p', f'config_file:={bridge_params_file}',
-        ],
-        output='screen',
-    )
-
-    image_bridge_cmd = Node(
-        package='ros_gz_image',
-        executable='image_bridge',
-        arguments=['/camera/image_raw'],
-        output='screen',
-    )
 
     spawn_aruco_cubes = Node(
         package='arm05_sim',
@@ -214,8 +204,6 @@ def generate_launch_description():
     for action in simulation_actions:
         ld.add_action(action)
     ld.add_action(robot_state_publisher_cmd)
-    ld.add_action(parameter_bridge_cmd)
-    ld.add_action(image_bridge_cmd)
     ld.add_action(delayed_spawn_aruco)
     ld.add_action(spawn_turtlebot_cmd)
     ld.add_action(navigation_cmd)
