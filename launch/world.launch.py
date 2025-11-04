@@ -119,7 +119,7 @@ def generate_launch_description():
             ign_resource_paths.append(existing_ign_path)
         ign_resource_path = os.pathsep.join(ign_resource_paths)
 
-        gz_server_args = f'-r -s -v2 "{world}"'
+        gz_server_args = f'-r -s -v2 {world}'
         gz_server_cmd = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
