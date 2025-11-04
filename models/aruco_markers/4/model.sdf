@@ -16,6 +16,14 @@
             <uri>model://aruco_markers/4/materials/textures</uri>
             <name>Marker4</name>
           </script>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0 0 0 1</specular>
+          <pbr type="metal">
+            <albedo_map>model://aruco_markers/4/materials/textures/4.png</albedo_map>
+            <metalness>0.0</metalness>
+            <roughness>1.0</roughness>
+          </pbr>
         </material>
       </visual>
     </link>
