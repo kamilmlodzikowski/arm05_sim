@@ -47,10 +47,9 @@ class ArucoSpawner(Node):
             cmd = [
                 'ros2', 'run', 'ros_gz_sim', 'spawn_entity',
                 '--name', name,
-                '--file', str(fpath),
-                '-x', f'{x}',
-                '-y', f'{y}',
-                '-z', '0.0',
+                '--sdf_filename', str(fpath),
+                '--pos', f'{x}', f'{y}', '0.0',
+                '--quat', '0.0', '0.0', '0.0', '1.0',
             ]
 
             result = subprocess.run(cmd, capture_output=True, text=True)
