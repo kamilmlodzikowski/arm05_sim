@@ -41,22 +41,22 @@ def _resolve_world_name(world_path: str) -> str:
 
 
 def generate_launch_description():
-    turtlebot3_launch_dir = os.path.join(
-        get_package_share_directory('turtlebot3_gazebo'),
-        'launch',
-    )
+    turtlebot3_share_dir = get_package_share_directory('turtlebot3_gazebo')
+    turtlebot3_launch_dir = os.path.join(turtlebot3_share_dir, 'launch')
     nav2_launch_dir = os.path.join(
         get_package_share_directory('nav2_bringup'),
         'launch',
     )
     arm05_share_dir = get_package_share_directory('arm05_sim')
 
-    models_path = os.path.join(arm05_share_dir, 'models')
+    arm05_models_path = os.path.join(arm05_share_dir, 'models')
+    turtlebot3_models_path = os.path.join(turtlebot3_share_dir, 'models')
+
     existing_gazebo_path = os.environ.get('GAZEBO_MODEL_PATH', '')
+    gazebo_paths = [arm05_models_path, turtlebot3_models_path]
     if existing_gazebo_path:
-        gazebo_model_path = models_path + os.pathsep + existing_gazebo_path
-    else:
-        gazebo_model_path = models_path
+        gazebo_paths.append(existing_gazebo_path)
+    gazebo_model_path = os.pathsep.join(gazebo_paths)
     resource_env_actions = [SetEnvironmentVariable('GAZEBO_MODEL_PATH', gazebo_model_path)]
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
@@ -108,26 +108,39 @@ def generate_launch_description():
             ) from exc
 
         existing_resource_path = os.environ.get('GZ_SIM_RESOURCE_PATH', '')
+        gz_resource_paths = [arm05_models_path, turtlebot3_models_path]
         if existing_resource_path:
-            gz_resource_path = models_path + os.pathsep + existing_resource_path
-        else:
-            gz_resource_path = models_path
+            gz_resource_paths.append(existing_resource_path)
+        gz_resource_path = os.pathsep.join(gz_resource_paths)
 
         existing_ign_path = os.environ.get('IGN_GAZEBO_RESOURCE_PATH', '')
+        ign_resource_paths = [arm05_models_path, turtlebot3_models_path]
         if existing_ign_path:
-            ign_resource_path = models_path + os.pathsep + existing_ign_path
-        else:
-            ign_resource_path = models_path
+            ign_resource_paths.append(existing_ign_path)
+        ign_resource_path = os.pathsep.join(ign_resource_paths)
 
-        gz_args = f'-r "{world}"'
-        gz_sim_cmd = IncludeLaunchDescription(
+        gz_server_args = f'-r -s -v2 "{world}"'
+        gz_server_cmd = IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
             ),
-            launch_arguments={'gz_args': gz_args}.items()
+            launch_arguments={
+                'gz_args': gz_server_args,
+                'on_exit_shutdown': 'true',
+            }.items()
         )
 
-        simulation_actions.append(gz_sim_cmd)
+        gz_client_cmd = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
+            ),
+            launch_arguments={
+                'gz_args': '-g -v2',
+                'on_exit_shutdown': 'true',
+            }.items()
+        )
+
+        simulation_actions.extend([gz_server_cmd, gz_client_cmd])
         resource_env_actions.append(SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource_path))
         resource_env_actions.append(SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', ign_resource_path))
         spawn_service = f'/world/{world_name}/create'
