@@ -13,6 +13,7 @@ from launch.actions import (
     DeclareLaunchArgument,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
+    TimerAction,
 )
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -187,6 +188,11 @@ def generate_launch_description():
         ]
     )
 
+    delayed_spawn_aruco = TimerAction(
+        period=5.0,
+        actions=[spawn_aruco_cubes]
+    )
+
     ld = LaunchDescription()
 
     # Add the commands to the launch description
@@ -197,7 +203,7 @@ def generate_launch_description():
     for action in simulation_actions:
         ld.add_action(action)
     ld.add_action(robot_state_publisher_cmd)
-    ld.add_action(spawn_aruco_cubes)
+    ld.add_action(delayed_spawn_aruco)
     ld.add_action(spawn_turtlebot_cmd)
     ld.add_action(navigation_cmd)
     
