@@ -353,3 +353,20 @@ waypoint_follower:
       plugin: "nav2_waypoint_follower::WaitAtWaypoint"
       enabled: True
       waypoint_pause_duration: 200
+
+collision_monitor:
+  ros__parameters:
+    use_sim_time: False
+    base_frame_id: base_link
+    odom_frame_id: odom
+    transform_timeout: 0.1
+    source_timeout: 0.3
+    slowdown_ratio: 0.5
+    stop_type: 2
+    observation_sources: "scan"
+    scan:
+      type: scan
+      topic: scan
+      min_points: 5
+      min_obstacle_height: 0.0
+      max_obstacle_height: 1.0

@@ -46,7 +46,7 @@ class ArucoSpawner(Node):
 
             cmd = [
                 'ros2', 'run', 'ros_gz_sim', 'spawn_entity',
-                '-entity', name,
+                '--name', name,
                 '-file', str(fpath),
                 '-x', f'{x}',
                 '-y', f'{y}',
