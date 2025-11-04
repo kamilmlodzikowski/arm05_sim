@@ -11,14 +11,11 @@
           </box>
         </geometry>
         <material>
-          <ambient>1 1 1 1</ambient>
-          <diffuse>1 1 1 1</diffuse>
-          <specular>0 0 0 1</specular>
-          <pbr type="metal">
-            <albedo_map>model://aruco_markers/2/materials/textures/2.png</albedo_map>
-            <metalness>0.0</metalness>
-            <roughness>1.0</roughness>
-          </pbr>
+          <script>
+            <uri>model://aruco_markers/2/materials/scripts</uri>
+            <uri>model://aruco_markers/2/materials/textures</uri>
+            <name>Marker2</name>
+          </script>
         </material>
       </visual>
     </link>
