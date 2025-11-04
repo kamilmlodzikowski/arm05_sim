@@ -66,6 +66,12 @@ def generate_launch_description():
     resource_env_actions.append(
         AppendEnvironmentVariable('GZ_SIM_RESOURCE_PATH', turtlebot3_models_path)
     )
+    resource_env_actions.append(
+        AppendEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', arm05_models_path)
+    )
+    resource_env_actions.append(
+        AppendEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', turtlebot3_models_path)
+    )
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     x_pose = LaunchConfiguration('x_pose', default='0.0')
