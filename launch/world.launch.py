@@ -2,7 +2,12 @@
 
 import os
 
-from ament_index_python.packages import get_package_share_directory
+import xml.etree.ElementTree as ET
+
+from ament_index_python.packages import (
+    PackageNotFoundError,
+    get_package_share_directory,
+)
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
@@ -15,6 +20,26 @@ from launch_ros.actions import Node
 import numpy as np
 
 
+def _resolve_world_name(world_path: str) -> str:
+    try:
+        tree = ET.parse(world_path)
+    except (ET.ParseError, FileNotFoundError):
+        return 'default'
+
+    root = tree.getroot()
+    world_element = root.find('world')
+    if world_element is not None:
+        return world_element.get('name', 'default') or 'default'
+
+    # Fall back to searching in case of nested structure
+    for candidate in root.findall('.//world'):
+        name = candidate.get('name')
+        if name:
+            return name
+
+    return 'default'
+
+
 def generate_launch_description():
     turtlebot3_launch_dir = os.path.join(
         get_package_share_directory('turtlebot3_gazebo'),
@@ -24,7 +49,6 @@ def generate_launch_description():
         get_package_share_directory('nav2_bringup'),
         'launch',
     )
-    pkg_gazebo_ros = get_package_share_directory('gazebo_ros')
     arm05_share_dir = get_package_share_directory('arm05_sim')
 
     models_path = os.path.join(arm05_share_dir, 'models')
@@ -33,6 +57,7 @@ def generate_launch_description():
         gazebo_model_path = models_path + os.pathsep + existing_gazebo_path
     else:
         gazebo_model_path = models_path
+    resource_env_actions = [SetEnvironmentVariable('GAZEBO_MODEL_PATH', gazebo_model_path)]
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     x_pose = LaunchConfiguration('x_pose', default='0.0')
@@ -46,21 +71,67 @@ def generate_launch_description():
     )
 
     world = os.path.join(arm05_share_dir, 'worlds', 'arm_house.world')
+    world_name = _resolve_world_name(world)
     map_file = os.path.join(arm05_share_dir, 'map', 'map.yaml')
     params_file = os.path.join(arm05_share_dir, 'param', 'waffle.yaml')
 
-    gzserver_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
-        ),
-        launch_arguments={'world': world}.items()
-    )
+    spawn_service = '/spawn_entity'
+    spawn_service_type = 'gazebo'
+    simulation_actions = []
 
-    gzclient_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_gazebo_ros, 'launch', 'gzclient.launch.py')
+    try:
+        pkg_gazebo_ros = get_package_share_directory('gazebo_ros')
+    except PackageNotFoundError:
+        pkg_gazebo_ros = None
+
+    if pkg_gazebo_ros is not None:
+        gzserver_cmd = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_gazebo_ros, 'launch', 'gzserver.launch.py')
+            ),
+            launch_arguments={'world': world}.items()
         )
-    )
+
+        gzclient_cmd = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_gazebo_ros, 'launch', 'gzclient.launch.py')
+            )
+        )
+
+        simulation_actions.extend([gzserver_cmd, gzclient_cmd])
+    else:
+        try:
+            pkg_ros_gz_sim = get_package_share_directory('ros_gz_sim')
+        except PackageNotFoundError as exc:
+            raise RuntimeError(
+                "Unable to locate simulation backend. Install either 'gazebo_ros' or 'ros_gz_sim'."
+            ) from exc
+
+        existing_resource_path = os.environ.get('GZ_SIM_RESOURCE_PATH', '')
+        if existing_resource_path:
+            gz_resource_path = models_path + os.pathsep + existing_resource_path
+        else:
+            gz_resource_path = models_path
+
+        existing_ign_path = os.environ.get('IGN_GAZEBO_RESOURCE_PATH', '')
+        if existing_ign_path:
+            ign_resource_path = models_path + os.pathsep + existing_ign_path
+        else:
+            ign_resource_path = models_path
+
+        gz_args = f'-r "{world}"'
+        gz_sim_cmd = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(pkg_ros_gz_sim, 'launch', 'gz_sim.launch.py')
+            ),
+            launch_arguments={'gz_args': gz_args}.items()
+        )
+
+        simulation_actions.append(gz_sim_cmd)
+        resource_env_actions.append(SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource_path))
+        resource_env_actions.append(SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', ign_resource_path))
+        spawn_service = f'/world/{world_name}/create'
+        spawn_service_type = 'ros_gz'
 
     robot_state_publisher_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -95,17 +166,23 @@ def generate_launch_description():
         executable='spawn_aruco.py',
         namespace='spawn_cubes',
         output='screen',
-        arguments=['--seed', aruco_seed]
+        arguments=[
+            '--seed', aruco_seed,
+            '--spawn-service', spawn_service,
+            '--spawn-service-type', spawn_service_type,
+            '--world', world_name,
+        ]
     )
 
     ld = LaunchDescription()
 
     # Add the commands to the launch description
     ld.add_action(SetEnvironmentVariable('TURTLEBOT3_MODEL', 'waffle'))
-    ld.add_action(SetEnvironmentVariable('GAZEBO_MODEL_PATH', gazebo_model_path))
+    for env_action in resource_env_actions:
+        ld.add_action(env_action)
     ld.add_action(aruco_seed_launch_arg)
-    ld.add_action(gzserver_cmd)
-    ld.add_action(gzclient_cmd)
+    for action in simulation_actions:
+        ld.add_action(action)
     ld.add_action(robot_state_publisher_cmd)
     ld.add_action(spawn_aruco_cubes)
     ld.add_action(spawn_turtlebot_cmd)
