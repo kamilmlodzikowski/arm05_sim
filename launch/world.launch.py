@@ -75,6 +75,7 @@ def generate_launch_description():
     world_name = _resolve_world_name(world)
     map_file = os.path.join(arm05_share_dir, 'map', 'map.yaml')
     params_file = os.path.join(arm05_share_dir, 'param', 'waffle.yaml')
+    bridge_params_file = os.path.join(arm05_share_dir, 'param', 'bridge.yaml')
 
     simulation_actions = []
 
@@ -171,6 +172,23 @@ def generate_launch_description():
         }.items()
     )
 
+    parameter_bridge_cmd = Node(
+        package='ros_gz_bridge',
+        executable='parameter_bridge',
+        arguments=[
+            '--ros-args',
+            '-p', f'config_file:={bridge_params_file}',
+        ],
+        output='screen',
+    )
+
+    image_bridge_cmd = Node(
+        package='ros_gz_image',
+        executable='image_bridge',
+        arguments=['/camera/image_raw'],
+        output='screen',
+    )
+
     spawn_aruco_cubes = Node(
         package='arm05_sim',
         executable='spawn_aruco.py',
@@ -196,6 +214,8 @@ def generate_launch_description():
     for action in simulation_actions:
         ld.add_action(action)
     ld.add_action(robot_state_publisher_cmd)
+    ld.add_action(parameter_bridge_cmd)
+    ld.add_action(image_bridge_cmd)
     ld.add_action(delayed_spawn_aruco)
     ld.add_action(spawn_turtlebot_cmd)
     ld.add_action(navigation_cmd)
