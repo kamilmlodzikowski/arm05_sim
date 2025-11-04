@@ -51,6 +51,7 @@ class ArucoSpawner(Node):
                 '--pos', f'{x}', f'{y}', '0.0',
                 '--quat', '0.0', '0.0', '0.0', '1.0',
             ]
+            print("Command to spawn aruco:", ' '.join(cmd))  # Debug print statement
 
             result = subprocess.run(cmd, capture_output=True, text=True)
             if result.returncode != 0:
