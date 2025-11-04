@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-import sys
-import rclpy
-from gazebo_msgs.srv import SpawnEntity
-import numpy as np
-from PIL import Image
-import time
+
 import argparse
 import os
+from pathlib import Path
 
+import numpy as np
+import rclpy
+from ament_index_python.packages import get_package_share_directory
+from gazebo_msgs.srv import SpawnEntity
 from rclpy.node import Node
 
 
@@ -27,8 +27,9 @@ class MinimalClientAsync(Node):
         self.max_rand_y = 1.0
 
         # Paths for aruco models
-        self.path_part1 = '/arm_ws/src/arm05_sim/models/aruco_markers/'
-        self.path_part2 = '/model.sdf'
+        share_dir = Path(get_package_share_directory('arm05_sim'))
+        self.aruco_models_dir = share_dir / 'models' / 'aruco_markers'
+        self.model_filename = 'model.sdf'
 
         self.final_aruco_positions = []
 
@@ -38,41 +39,35 @@ class MinimalClientAsync(Node):
             x, y = self.aruco_positions[aruco_index]
             self.get_logger().info("Aruco "+str(i)+": x= "+str(x).ljust(6)+ "y= "+str(y).ljust(6))
             del self.aruco_positions[aruco_index]
-            x += (np.random.random()*2-1)*self.max_rand_x
-            y += (np.random.random()*2-1)*self.max_rand_y        
+            x += (np.random.random()*2 - 1) * self.max_rand_x
+            y += (np.random.random()*2 - 1) * self.max_rand_y
             self.final_aruco_positions.append((x, y))
-            fpath = self.path_part1 + str(i) + self.path_part2
-            with open(fpath, 'r') as file:
+            fpath = self.aruco_models_dir / str(i) / self.model_filename
+            with fpath.open('r') as file:
                 xml_str = file.read()
                 self.req.initial_pose.position.x = x
                 self.req.initial_pose.position.y = y
                 self.req.name = 'aruco_'+str(i)
                 self.req.xml = xml_str
                 self.future = self.client.call_async(self.req)
-                file.close()
             # time.sleep(0.2) # In case of troubles with spawning, uncomment
 
-    def log_aruco_positions(self, log_path: str="/arm_ws/src/arm05_sim/logs"):
-        def log_file(self: MinimalClientAsync, filename: str):
-            with open(filename, 'w') as file:
+    def log_aruco_positions(self, log_path: Path | None = None):
+        def log_file(self: 'MinimalClientAsync', filename: Path):
+            with filename.open('w') as file:
                 for i, pose in enumerate(self.final_aruco_positions):
-                    file.write('Aruco '+str(i)+': ')
-                    file.write('x: '+str(pose[0]))
-                    file.write('y: '+str(pose[1])+'\n')
-                file.close()
+                    file.write(f'Aruco {i}: ')
+                    file.write(f'x: {pose[0]} ')
+                    file.write(f'y: {pose[1]}\n')
 
-        if not os.path.exists(log_path):
-            os.system("mkdir -p {}".format(log_path))
-            self.get_logger().info("Created log directory: "+log_path)
-        if os.path.exists(log_path):
-            log_file(self, os.path.join(log_path, "latest.txt"))
-            log_file(self, os.path.join(log_path, str(self.get_clock().now().seconds_nanoseconds()[0])+".txt"))
-        else:
-            error_msg = "Log path does not exist, cannot save aruco postion log (path: {})".format(log_path)
-            self.get_logger().error(error_msg)
-            raise NotADirectoryError(error_msg)
-            
-        
+        if log_path is None:
+            log_path = Path(os.path.expanduser('~')) / '.ros' / 'arm05_sim' / 'logs'
+
+        log_path.mkdir(parents=True, exist_ok=True)
+
+        timestamp = self.get_clock().now().seconds_nanoseconds()[0]
+        log_file(self, log_path / 'latest.txt')
+        log_file(self, log_path / f'{timestamp}.txt')
 
 def main(args=None):
     rclpy.init(args=args)
