@@ -108,23 +108,26 @@ class MinimalClientAsync(Node):
             attempts += 1
             if max_attempts is not None and attempts >= max_attempts:
                 self.get_logger().debug(
-                    "Spawn service '%s' (%s) not available yet, trying next option",
-                    service_to_use,
-                    mode,
+                    "Spawn service '%s' (%s) not available yet, trying next option" % (
+                        service_to_use,
+                        mode,
+                    )
                 )
                 return None
             if not has_logged:
                 self.get_logger().info(
-                    "Waiting for spawn service '%s' (%s)...",
-                    service_to_use,
-                    mode,
+                    "Waiting for spawn service '%s' (%s)..." % (
+                        service_to_use,
+                        mode,
+                    )
                 )
                 has_logged = True
 
         self.get_logger().info(
-            "Connected to spawn service '%s' (%s)",
-            service_to_use,
-            mode,
+            "Connected to spawn service '%s' (%s)" % (
+                service_to_use,
+                mode,
+            )
         )
         self.request_factory = request_factory
         self.spawn_service = service_to_use
@@ -152,15 +155,14 @@ class MinimalClientAsync(Node):
 
             if not rclpy.spin_until_future_complete(self, future, timeout_sec=5.0):
                 self.get_logger().error(
-                    "Timed out waiting for spawn service '%s'",
-                    self.spawn_service,
+                    "Timed out waiting for spawn service '%s'" % self.spawn_service
                 )
                 continue
 
             try:
                 response = future.result()
             except Exception as exc:  # noqa: BLE001
-                self.get_logger().error('Service call failed: %r', exc)
+                self.get_logger().error(f'Service call failed: {exc!r}')
                 continue
 
             success = getattr(response, 'success', True)
@@ -168,19 +170,14 @@ class MinimalClientAsync(Node):
                 status_message = getattr(response, 'status_message', '')
                 if status_message:
                     self.get_logger().error(
-                        "Failed to spawn 'aruco_%d': %s",
-                        i,
-                        status_message,
+                        "Failed to spawn 'aruco_%d': %s" % (i, status_message)
                     )
                 else:
-                    self.get_logger().error("Failed to spawn 'aruco_%d'", i)
+                    self.get_logger().error("Failed to spawn 'aruco_%d'" % i)
                 continue
 
             self.get_logger().info(
-                "Spawned aruco_%d at (%.2f, %.2f)",
-                i,
-                x,
-                y,
+                "Spawned aruco_%d at (%.2f, %.2f)" % (i, x, y)
             )
             self.final_aruco_positions.append((x, y))
 
@@ -259,7 +256,7 @@ def main(args=None):
         world_name=args.world,
     )
 
-    minimal_client.get_logger().info("Seed: %s", args.seed)
+    minimal_client.get_logger().info("Seed: %s" % args.seed)
 
     minimal_client.spawn_aruco_cubes()
     minimal_client.log_aruco_positions()
