@@ -45,11 +45,12 @@ class ArucoSpawner(Node):
             name = f'aruco_{i}'
 
             cmd = [
-                'ros2', 'run', 'ros_gz_sim', 'spawn_entity',
-                '--name', name,
-                '--sdf_filename', str(fpath),
-                '--pos', f'{x}', f'{y}', '0.0',
-                '--quat', '0.0', '0.0', '0.0', '1.0',
+                'ros2', 'run', 'ros_gz_sim', 'create',
+                '-name', name,
+                '-file', str(fpath),
+                '-x', f'{x}',
+                '-y', f'{y}',
+                '-z', '0.0',
             ]
             # print("Command to spawn aruco:", ' '.join(cmd))  # Debug print statement
             self.get_logger().info("Command to spawn aruco: " + ' '.join(cmd))
