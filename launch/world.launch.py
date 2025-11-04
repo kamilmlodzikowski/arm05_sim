@@ -76,8 +76,6 @@ def generate_launch_description():
     map_file = os.path.join(arm05_share_dir, 'map', 'map.yaml')
     params_file = os.path.join(arm05_share_dir, 'param', 'waffle.yaml')
 
-    spawn_service = '/spawn_entity'
-    spawn_service_type = 'gazebo'
     simulation_actions = []
 
     try:
@@ -144,8 +142,6 @@ def generate_launch_description():
         simulation_actions.extend([gz_server_cmd, gz_client_cmd])
         resource_env_actions.append(SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource_path))
         resource_env_actions.append(SetEnvironmentVariable('IGN_GAZEBO_RESOURCE_PATH', ign_resource_path))
-        spawn_service = f'/world/{world_name}/create'
-        spawn_service_type = 'ros_gz'
 
     robot_state_publisher_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -182,9 +178,6 @@ def generate_launch_description():
         output='screen',
         arguments=[
             '--seed', aruco_seed,
-            '--spawn-service', spawn_service,
-            '--spawn-service-type', spawn_service_type,
-            '--world', world_name,
         ]
     )
 
